@@ -3,11 +3,21 @@ import pandas as pd
 import random
 from featureranker import FeatureRanker
 
+alter = 0
 fr = FeatureRanker()
 
 
+class DecisionTree:
+    left = None
+    right = None
+    splitvalue = 0.0
+    f_index = 0
+    family = -1
+
+
 def splitPoint(data, feature_index):
-    return np.median(data[:][feature_index])
+    # print("splitpoint : ", data[:, feature_index])
+    return np.median(data[:, feature_index])
 
 
 def split(data, measure):
@@ -16,9 +26,10 @@ def split(data, measure):
     return feature_index, splitpoint
 
 
-def buildDecisionTree(data, measure):
+def buildDecisionTree(data, measure, alter):
+    # print(data.shape)
     root = DecisionTree()
-    av = np.average(data[:][-1])
+    av = np.average(data[:, -1])
     # if the data size is 0
     if (np.shape(data))[0] == 0:
         root = None
@@ -36,23 +47,135 @@ def buildDecisionTree(data, measure):
         return root
 
     root.f_index, root.splitvalue = split(data, measure)
-    leftData = np.array(0)
-    rightData = np.array(0)
+    leftData = None
+    rightData = None
+    flag1 = 0
+    flag2 = 0
+    # print("split : "+str(root.splitvalue))
+    # print("feature index : ", root.f_index)
     for d in data:
-        if d[root.f_index] <= root.splitvalue:
-            leftData = np.vstack(leftData, d)
-        else:
-            rightData = np.vstack(rightData, d)
+
+        # print("dval ", d[root.f_index])
+        if d[root.f_index] < root.splitvalue:
+            if flag1 != 0:
+                leftData = np.vstack((leftData, d))
+
+            else:
+                leftData = d
+                flag1 = 1
+        elif d[root.f_index] > root.splitvalue:
+            if flag2 != 0:
+                rightData = np.vstack((rightData, d))
+            else:
+                rightData = d
+                flag2 = 1
+        else:  # divide equal elements equally among left and right using alter flag
+            if alter == 0:
+                if flag1 != 0:
+                    leftData = np.vstack((leftData, d))
+                    alter = 1
+
+                else:
+                    leftData = d
+                    flag1 = 1
+                    alter = 1
+
+            else:
+                if flag2 != 0:
+                    rightData = np.vstack((rightData, d))
+                    alter = 0
+
+                else:
+                    rightData = d
+                    flag2 = 1
+                    alter = 0
+
+    leftData = np.atleast_2d(leftData)
+    rightData = np.atleast_2d(rightData)
+
+    # print(leftData.shape, rightData.shape)
+
     leftData = np.delete(leftData, axis=1, obj=root.f_index)
     rightData = np.delete(rightData, axis=1, obj=root.f_index)
-    root.left = buildDecisionTree(leftData, measure)
-    root.right = buildDecisionTree(rightData, measure)
+    root.left = buildDecisionTree(leftData, measure, alter)
+    root.right = buildDecisionTree(rightData, measure, alter)
     return root
 
 
-class DecisionTree:
-    left = DecisionTree()
-    right = DecisionTree()
-    splitvalue = 0.0
-    f_index = 0
-    family = -1
+def predict(data, root):
+    if root.family < 0:
+        feat = data[root.f_index]
+        data = np.delete(data, axis=0, obj=root.f_index)
+        if root.splitvalue > feat:
+            return predict(data, root.left)
+        else:
+            return predict(data, root.right)
+    else:
+        return root.family
+
+
+def predictData(data, root):
+    a, d = 0, 0
+    for row in data:
+        if row[-1] == 1 == predict(row, root):
+            d += 1
+        elif row[-1] == 0 == predict(row, root):
+            a += 1
+    bc = data.shape[0] - (a+d)
+    return ((a+d)/data.shape[0]), (2*a/((2*a) + bc))
+
+# 10 fold cross validation
+
+
+def CrossValidate(data):
+    acclis = [0, 0, 0, 0]
+    flis = [0, 0, 0, 0]
+    for i in range(10):
+        test = None
+        train = None
+        lenx = int((data.shape[0])/10)
+
+        if (i != 9):
+            test = (data[i*lenx:(i+1)*lenx])
+        else:
+            test = (data[i*lenx:])
+
+        if (i != 0):
+            if type(train) != type(None):
+                train = np.vstack((train, data[0:i*lenx]))
+            else:
+                train = (data[0:i*lenx])
+        if (i != 9):
+            if type(train) != type(None):
+                train = np.vstack((train, data[(i+1)*lenx:]))
+            else:
+                train = data[(i+1)*lenx:]
+        # chisquare, ginisplit, gainratio, infogain
+        root = buildDecisionTree(train, 'chisquare', 0)
+        acc = predictData(test, root)
+        acclis[0] += acc[0]
+        flis[0] += acc[1]
+
+        root = buildDecisionTree(train, 'ginisplit', 0)
+        acc = predictData(test, root)
+        acclis[1] += acc[0]
+        flis[1] += acc[1]
+
+        root = buildDecisionTree(train, 'gainratio', 0)
+        acc = predictData(test, root)
+        acclis[2] += acc[0]
+        flis[2] += acc[1]
+
+        root = buildDecisionTree(train, 'infogain', 0)
+        acc = predictData(test, root)
+        acclis[3] += acc[0]
+        flis[3] += acc[1]
+    return np.divide(acclis, 10), np.divide(flis, 10)
+
+
+df = pd.read_csv("data/32.csv", header=None).sample(frac=1)
+data = np.array(df)
+for row in data:
+    if row[-1] > 1:
+        row[-1] = 1
+print(CrossValidate(data))

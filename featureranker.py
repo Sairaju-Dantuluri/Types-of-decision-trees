@@ -35,7 +35,10 @@ class FeatureRanker:
 
         for i in range(shape[0]):
             for j in range(shape[1]):
-                value = ((arr[i][j]-arr2[i][j])**2)/arr2[i][j]
+                if(arr2[i][j] != 0):
+                    value = ((arr[i][j]-arr2[i][j])**2)/arr2[i][j]
+                else:
+                    value = 0
                 arr[i][j] = value
 
         sum = 0
@@ -70,10 +73,21 @@ class FeatureRanker:
         eRight = 0
 
         for i in range(len(arr)):
-            pLeft = arr[0][i]/sum(arr[0])
-            eLeft = eLeft - (pLeft)*(math.log2(pLeft))
-            pRight = arr[1][i]/sum(arr[1])
-            eRight = eRight - (pRight)*(math.log2(pRight))
+            if(sum(arr[0]) != 0):
+                pLeft = arr[0][i]/sum(arr[0])
+            else:
+                pLeft = 0
+
+            if pLeft != 0:
+                eLeft = eLeft - (pLeft)*(math.log2(pLeft))
+
+            if(sum(arr[1]) != 0):
+                pRight = arr[1][i]/sum(arr[1])
+            else:
+                pRight = 0
+
+            if pRight != 0:
+                eRight = eRight - (pRight)*(math.log2(pRight))
 
         total = sum(arr[0]) + sum(arr[1])
         info = eLeft*(sum(arr[0])/total) + eRight*(sum(arr[1])/total)
@@ -88,41 +102,36 @@ class FeatureRanker:
         splitInfo = 0
 
         for i in range(arr.shape[0]):
-            splitInfo = splitInfo + \
-                (sum(arr[i])/total)*(math.log2(sum(arr[i])/total))
-
-        gainRatio = gain/splitInfo
+            if(sum(arr[i]) != 0):
+                splitInfo = splitInfo + \
+                    (sum(arr[i])/total)*(math.log2(sum(arr[i])/total))
+        if splitInfo != 0:
+            gainRatio = gain/splitInfo
+        else:
+            gainRatio = 0
 
         return gainRatio
 
     def rank_features(self, data, measure):
-
-        no_of_unique = []
-
-        for i in range(data.shape[1]):
-            no_of_unique.append(len(pd.unique(data[i])))
-
-        avgs = []
-
-        for i in range(data.shape[1]):
-            avgs.append(np.mean(data[i]))
+        # print(data.shape)
+        avgs = np.mean(data, axis=0)
 
         values = np.zeros(data.shape[-1]-1)
 
         for i in range(data.shape[-1]-1):
             arr = np.zeros((2, 2))
-            for j in range(len(data[i])):
+            for j in range(data.shape[0]):
 
-                if data[i][j] >= avgs[i]:
-                    if(data[-1][j] == 0):
-                        arr[0][1] = arr[0][1] + 1
+                if data[j][i] >= avgs[i]:
+                    if(data[j][-1] == 0):
+                        arr[0][1] += 1
                     else:
-                        arr[0][0] = arr[0][0] + 1
+                        arr[0][0] += 1
                 else:
-                    if(data[-1][j] == 0):
-                        arr[1][1] = arr[1][1] + 1
+                    if(data[j][-1] == 0):
+                        arr[1][1] += 1
                     else:
-                        arr[1][0] = arr[1][0] + 1
+                        arr[1][0] += 1
 
             # Here,replce gini_split with the required function
             if measure == 'ginisplit':
@@ -134,7 +143,7 @@ class FeatureRanker:
             if measure == 'chisquare':
                 values[i] = self.chi_square(arr)
 
-            if measure == 'informationgain':
+            if measure == 'infogain':
                 values[i] = self.info_gain(arr)
 
         if measure == 'ginisplit':
