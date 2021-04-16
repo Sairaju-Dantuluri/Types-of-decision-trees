@@ -122,14 +122,19 @@ def predictData(data, root):
         elif row[-1] == 0 == predict(row, root):
             a += 1
     bc = data.shape[0] - (a+d)
-    return ((a+d)/data.shape[0]), (2*a/((2*a) + bc))
+    acc = 0.0
+    acc = (a+d)/data.shape[0]
+    fsqr = 0.0
+    if a != 0:
+        fsqr = (2*a/((2*a) + bc))
+    return acc, fsqr
 
 # 10 fold cross validation
 
 
 def CrossValidate(data):
-    acclis = [0, 0, 0, 0]
-    flis = [0, 0, 0, 0]
+    acclis = [0, 0, 0, 0, 0]
+    flis = [0, 0, 0, 0, 0]
     for i in range(10):
         test = None
         train = None
@@ -152,6 +157,7 @@ def CrossValidate(data):
                 train = data[(i+1)*lenx:]
         # chisquare, ginisplit, gainratio, infogain
         root = buildDecisionTree(train, 'chisquare', 0)
+        print("testdata shape : ", test.shape)
         acc = predictData(test, root)
         acclis[0] += acc[0]
         flis[0] += acc[1]
@@ -170,12 +176,30 @@ def CrossValidate(data):
         acc = predictData(test, root)
         acclis[3] += acc[0]
         flis[3] += acc[1]
+
+        root = buildDecisionTree(train, 'misclass', 0)
+        acc = predictData(test, root)
+        acclis[4] += acc[0]
+        flis[4] += acc[1]
     return np.divide(acclis, 10), np.divide(flis, 10)
 
 
-df = pd.read_csv("data/32.csv", header=None).sample(frac=1)
-data = np.array(df)
-for row in data:
-    if row[-1] > 1:
-        row[-1] = 1
-print(CrossValidate(data))
+output = "chisquareacc,chisquarefsqr,ginisplitacc,ginisplitfsqr,gainratioacc,gainratiofsqr,infogainacc,infogainfsqr,miscalssacc,miscalssfsqr\n"
+for i in range(51, 52):
+    filename = "data/"+str(i)+".csv"
+    df = pd.read_csv(filename, header=None).sample(frac=1)
+    data = np.array(df)
+    for row in data:
+        if row[-1] > 1:
+            row[-1] = 1
+    acc, fsqr = CrossValidate(data)
+    dataoutput = ''
+    for j in range(5):
+        dataoutput += (str(acc[j]) + "," + str(fsqr[j])+",")
+    dataoutput = dataoutput[:-1]
+    dataoutput += "\n"
+    output += dataoutput
+    resultfile = "results/res"+str(i)+".csv"
+    file = open(resultfile, 'a')
+    file.write(output)
+    print("done : ", i, ".csv")

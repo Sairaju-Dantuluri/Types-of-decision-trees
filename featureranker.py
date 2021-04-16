@@ -68,49 +68,78 @@ class FeatureRanker:
 
         return gini
 
+    def entropy(self, arr):
+        total = 0
+        if(sum(arr) == 0):
+            return 0
+        for p in arr:
+            p = p / sum(arr)
+            if p != 0:
+                total += p * math.log2(p)
+
+        total *= -1
+        return total
+
     def info_gain(self, arr):
-        eLeft = 0
-        eRight = 0
 
-        for i in range(len(arr)):
-            if(sum(arr[0]) != 0):
-                pLeft = arr[0][i]/sum(arr[0])
-            else:
-                pLeft = 0
+        parent_node = np.zeros(arr.shape[-1])
 
-            if pLeft != 0:
-                eLeft = eLeft - (pLeft)*(math.log2(pLeft))
+        parent_node = arr.sum(axis=0)
+        parent_entropy = self.entropy(parent_node)
 
-            if(sum(arr[1]) != 0):
-                pRight = arr[1][i]/sum(arr[1])
-            else:
-                pRight = 0
+        total = 0
+        for i in range(arr.shape[0]):
+            total += sum(arr[i])
 
-            if pRight != 0:
-                eRight = eRight - (pRight)*(math.log2(pRight))
+        Sum = 0
+        for a in arr:
+            Sum += (sum(a)/total) * self.entropy(a)
 
-        total = sum(arr[0]) + sum(arr[1])
-        info = eLeft*(sum(arr[0])/total) + eRight*(sum(arr[1])/total)
+        info = parent_entropy - Sum
 
         return info
 
     def gain_ratio(self, arr):
+
         gain = self.info_gain(arr)
 
-        total = sum(arr[0]) + sum(arr[1])
+        total = 0
+        for i in range(arr.shape[0]):
+            total += sum(arr[i])
 
         splitInfo = 0
 
         for i in range(arr.shape[0]):
             if(sum(arr[i]) != 0):
-                splitInfo = splitInfo + \
-                    (sum(arr[i])/total)*(math.log2(sum(arr[i])/total))
-        if splitInfo != 0:
+                p = sum(arr[i])/total
+                splitInfo = splitInfo + (p*(math.log2(p)))
+
+        splitInfo *= -1
+        if(splitInfo != 0):
             gainRatio = gain/splitInfo
         else:
             gainRatio = 0
 
         return gainRatio
+
+    def misclass_error(self, arr):
+        error = 0
+        total = 0
+        pmax = 0
+        for i in range(arr.shape[0]):
+            total += sum(arr[i])
+
+        for i in range(arr.shape[0]):
+            if(sum(arr[i]) != 0):
+                for j in range(arr.shape[1]):
+                    p = arr[i][j]/sum(arr[i])
+                    if(p > pmax):
+                        pmax = p
+
+            node_p = sum(arr[i])/total
+            error += node_p*(1 - pmax)
+
+        return error
 
     def rank_features(self, data, measure):
         # print(data.shape)
@@ -145,6 +174,9 @@ class FeatureRanker:
 
             if measure == 'infogain':
                 values[i] = self.info_gain(arr)
+
+            if measure == 'misclass':
+                values[i] = self.misclass_error(arr)
 
         if measure == 'ginisplit':
             values = -values
